@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AFS Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #1c1c1e;
+    --surface:  #28282b;
+    --surface2: #333337;
+    --border:   #48484e;
+    --accent:   #C8102E;
+    --accent2:  #e8475f;
+    --accent-dim: rgba(200,16,46,0.18);
+    --gold:     #f4c94e;
+    --text:     #f0f0f2;
+    --muted:    #9a9aa8;
+    --green:    #34d399;
+    --red:      #C8102E;
+    --primary:  #6D6E71;
+    --radius:   14px;
+  }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px 60px;
+    background-image:
+      radial-gradient(ellipse 70% 40% at 50% -10%, rgba(200,16,46,0.12) 0%, transparent 65%);
+  }
+
+  .card {
+    width: 100%;
+    max-width: 580px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.55);
+    animation: fadeUp 0.45s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(18px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 26px 28px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(200,16,46,0.1) 0%, transparent 55%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(200,16,46,0.4);
+  }
+  .header-text h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-text p  { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: 'DM Mono', monospace; }
+
+  /* ── Body ── */
+  .body { padding: 20px 24px 28px; }
+
+  /* ── Table ── */
+  .table-wrap { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl thead tr { background: var(--surface2); }
+  .tbl thead th {
+    padding: 10px 14px; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-align: right;
+  }
+  .tbl thead th:first-child { text-align: left; }
+  .tbl tbody tr { border-top: 1px solid var(--border); transition: background 0.15s; }
+  .tbl tbody tr:hover { background: rgba(200,16,46,0.05); }
+  .tbl tbody td { padding: 6px 14px; font-size: 14px; text-align: right; color: var(--text); }
+  .tbl tbody td:first-child {
+    text-align: left; font-family: 'DM Mono', monospace;
+    font-size: 13px; color: var(--primary); width: 70px; font-weight: 500;
+  }
+  .pct { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--muted); width: 90px; }
+  .pct.active { color: var(--green); }
+
+  /* ── Input ── */
+  .winput {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 13px; padding: 6px 8px; text-align: right; outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .winput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(200,16,46,0.18); }
+  .winput::placeholder { color: #555; }
+  .winput::-webkit-outer-spin-button,
+  .winput::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  /* ── Total badge ── */
+  .total-badge {
+    font-size: 11px; color: var(--muted); text-align: right;
+    margin-top: 10px; font-family: 'DM Mono', monospace;
+  }
+  .total-badge span { color: var(--accent2); }
+
+  /* ── Summary cards ── */
+  .summary { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px 16px;
+    position: relative; overflow: hidden;
+  }
+  .stat-card.afs-card {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, rgba(200,16,46,0.14), rgba(200,16,46,0.04));
+    border-color: rgba(200,16,46,0.4);
+  }
+  .stat-card.afs-card .stat-val {
+    font-size: 32px; font-weight: 700; font-family: 'DM Mono', monospace;
+    color: var(--gold); letter-spacing: -1px;
+  }
+  .stat-label {
+    font-size: 10px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;
+  }
+  .stat-val { font-family: 'DM Mono', monospace; font-size: 17px; font-weight: 500; color: var(--text); }
+  .stat-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .afs-left .stat-label { margin-bottom: 6px; }
+  .afs-badge {
+    font-size: 11px; font-weight: 600;
+    background: rgba(200,16,46,0.15); color: var(--accent2);
+    border: 1px solid rgba(200,16,46,0.3); border-radius: 20px; padding: 3px 10px;
+  }
+
+  /* ── Distribution bar ── */
+  .bar-row {
+    margin-top: 18px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
+  }
+  .bar-label-row {
+    display: flex; justify-content: space-between; margin-bottom: 9px;
+    font-size: 11px; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .bar-track {
+    height: 10px; background: var(--border);
+    border-radius: 99px; overflow: hidden; display: flex; gap: 2px;
+  }
+  .bar-seg { height: 100%; border-radius: 99px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .bar-seg.coarse { background: linear-gradient(90deg, #C8102E, #e8475f); }
+  .bar-seg.medium { background: linear-gradient(90deg, #6D6E71, #9a9aaa); }
+  .bar-seg.fine   { background: linear-gradient(90deg, #34d399, #6ee7b7); }
+  .bar-legend { display: flex; gap: 16px; margin-top: 9px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-dot.coarse { background: #C8102E; }
+  .legend-dot.medium { background: #6D6E71; }
+  .legend-dot.fine   { background: #34d399; }
+
+  /* ── Chart ── */
+  .chart-wrap {
+    margin-top: 18px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 16px 10px;
+  }
+  .chart-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .chart-title-left { display: flex; align-items: center; gap: 10px; }
+  .chart-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .chart-afs-label { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--gold); }
+  canvas#lineChart { width: 100% !important; display: block; }
+
+  .save-chart-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 11px;
+    background: rgba(200,16,46,0.1); border: 1px solid rgba(200,16,46,0.3);
+    border-radius: 8px; color: var(--accent2);
+    font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .save-chart-btn:hover {
+    background: rgba(200,16,46,0.2); border-color: rgba(200,16,46,0.6); color: #fff;
+  }
+  .save-chart-btn svg { flex-shrink: 0; }
+
+  /* ── Reset btn ── */
+  .reset-btn {
+    margin-top: 14px; width: 100%; padding: 10px;
+    background: transparent; border: 1px solid var(--border); border-radius: 10px;
+    color: var(--muted); font-family: 'Sora', sans-serif; font-size: 13px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .reset-btn:hover {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(200,16,46,0.06);
+  }
+</style>
+</head>
+<body>
+
+<!-- Hidden export target -->
+<canvas id="exportCanvas" style="display:none;position:absolute;left:-9999px;top:-9999px;"></canvas>
+
+<div class="card" id="mainCard">
+  <div class="header">
+    <div class="header-icon">⚗️</div>
+    <div class="header-text">
+      <h1>AFS Calculator</h1>
+      <p>American Foundry Society · Sand Fineness</p>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Sieve</th>
+            <th>Weight (g)</th>
+            <th>% Retained</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="total-badge">Sand Weight: <span id="totalW">0.00</span> g</div>
+
+    <div class="summary">
+      <div class="stat-card afs-card">
+        <div class="afs-left">
+          <div class="stat-label">AFS Fineness Number</div>
+          <div class="stat-val" id="afsVal">—</div>
+        </div>
+        <div class="afs-badge">AFS GFN</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Coarse · M20+30+40</div>
+        <div class="stat-val" id="m20">—</div>
+        <div class="stat-sub">Coarse fraction</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Medium · M50+70+100</div>
+        <div class="stat-val" id="m50">—</div>
+        <div class="stat-sub">Medium fraction</div>
+      </div>
+      <div class="stat-card" style="grid-column:1/-1">
+        <div class="stat-label">Fine · M200+270+Pan</div>
+        <div class="stat-val" id="m200">—</div>
+        <div class="stat-sub">Fine fraction</div>
+      </div>
+    </div>
+
+    <div class="bar-row">
+      <div class="bar-label-row">
+        <span>Distribution</span>
+        <span>100%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-seg coarse" id="barCoarse" style="width:0%"></div>
+        <div class="bar-seg medium" id="barMedium" style="width:0%"></div>
+        <div class="bar-seg fine"   id="barFine"   style="width:0%"></div>
+      </div>
+      <div class="bar-legend">
+        <div class="legend-item"><div class="legend-dot coarse"></div>Coarse (20–40)</div>
+        <div class="legend-item"><div class="legend-dot medium"></div>Medium (50–100)</div>
+        <div class="legend-item"><div class="legend-dot fine"></div>Fine (200–Pan)</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-title-row">
+        <div class="chart-title-left">
+          <span class="chart-title">% Retained per Sieve</span>
+          <span class="chart-afs-label" id="chartAfsLabel"></span>
+        </div>
+        <button class="save-chart-btn" id="saveBtn">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v6M3.5 5L6 7.5 8.5 5M2 9h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Save PNG
+        </button>
+      </div>
+      <canvas id="lineChart" height="200"></canvas>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">↺ Reset All</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const sieves = [
+    {name:'20',  m:10},
+    {name:'30',  m:20},
+    {name:'40',  m:30},
+    {name:'50',  m:40},
+    {name:'70',  m:50},
+    {name:'100', m:70},
+    {name:'140', m:100},
+    {name:'200', m:140},
+    {name:'270', m:200},
+    {name:'Pan', m:300}
+  ];
+
+  /* ── Build table rows ── */
+  const tbody = document.getElementById('tbody');
+  sieves.forEach((s, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.name}</td>
+      <td><input type="number" step="0.01" min="0" placeholder="0.00" data-i="${i}" class="winput"></td>
+      <td class="pct">—</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const inputs      = document.querySelectorAll('.winput');
+  const totalW_el   = document.getElementById('totalW');
+  const afs_el      = document.getElementById('afsVal');
+  const m20_el      = document.getElementById('m20');
+  const m50_el      = document.getElementById('m50');
+  const m200_el     = document.getElementById('m200');
+  const barCoarse   = document.getElementById('barCoarse');
+  const barMedium   = document.getElementById('barMedium');
+  const barFine     = document.getElementById('barFine');
+  const chartAfsLbl = document.getElementById('chartAfsLabel');
+
+  /* ── Enter key → next field ── */
+  inputs.forEach((inp, idx) => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const next = inputs[idx + 1];
+        if (next) next.focus();
+      }
+    });
+  });
+
+  /* ── Chart setup ── */
+  const chartCtx = document.getElementById('lineChart').getContext('2d');
+  const gradFill  = chartCtx.createLinearGradient(0, 0, 0, 200);
+  gradFill.addColorStop(0, 'rgba(200,16,46,0.30)');
+  gradFill.addColorStop(1, 'rgba(200,16,46,0)');
+
+  const lineChart = new Chart(chartCtx, {
+    type: 'line',
+    data: {
+      labels: sieves.map(s => s.name),
+      datasets: [{
+        label: '% Retained',
+        data: new Array(sieves.length).fill(0),
+        borderColor: '#C8102E',
+        backgroundColor: gradFill,
+        borderWidth: 2.5,
+        pointBackgroundColor: '#e8475f',
+        pointBorderColor: '#28282b',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointHoverBackgroundColor: '#f4c94e',
+        pointHoverBorderColor: '#28282b',
+        tension: 0.35,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 350, easing: 'easeInOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#333337',
+          borderColor: '#48484e',
+          borderWidth: 1,
+          titleColor: '#e8475f',
+          bodyColor: '#f0f0f2',
+          titleFont: { family: 'DM Mono', size: 12 },
+          bodyFont:  { family: 'DM Mono', size: 13 },
+          callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)}%` },
+          padding: 10,
+          displayColors: false,
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(72,72,78,0.6)', drawTicks: false },
+          ticks: { color: '#9a9aa8', font: { family: 'DM Mono', size: 11 }, padding: 6 },
+          border: { color: '#48484e' }
+        },
+        y: {
+          min: 0,
+          suggestedMax: 10,
+          grid: { color: 'rgba(72,72,78,0.6)', drawTicks: false },
+          ticks: {
+            color: '#9a9aa8', font: { family: 'DM Mono', size: 11 },
+            callback: v => v + '%', maxTicksLimit: 6, padding: 6
+          },
+          border: { color: '#48484e' }
+        }
+      }
+    }
+  });
+
+  /* ── Recalc ── */
+  function recalc() {
+    let total = 0;
+    inputs.forEach(inp => total += parseFloat(inp.value) || 0);
+
+    let afsNum = 0, m20 = 0, m50 = 0, m200 = 0;
+    const pctData = [];
+
+    tbody.querySelectorAll('tr').forEach((tr, idx) => {
+      const w   = parseFloat(tr.querySelector('input').value) || 0;
+      const pct = total > 0 ? (w / total) * 100 : 0;
+      pctData.push(pct);
+      const pctEl = tr.querySelector('.pct');
+      pctEl.textContent = total > 0 ? pct.toFixed(2) + '%' : '—';
+      pctEl.classList.toggle('active', pct > 0);
+      afsNum += (pct * sieves[idx].m) / 100;
+      if (['20','30','40'].includes(sieves[idx].name))    m20  += pct;
+      if (['50','70','100'].includes(sieves[idx].name))   m50  += pct;
+      if (['200','270','Pan'].includes(sieves[idx].name)) m200 += pct;
+    });
+
+    totalW_el.textContent = total.toFixed(2);
+    afs_el.textContent    = total > 0 ? afsNum.toFixed(2) : '—';
+    m20_el.textContent    = total > 0 ? m20.toFixed(2)  + '%' : '—';
+    m50_el.textContent    = total > 0 ? m50.toFixed(2)  + '%' : '—';
+    m200_el.textContent   = total > 0 ? m200.toFixed(2) + '%' : '—';
+    barCoarse.style.width = m20.toFixed(2)  + '%';
+    barMedium.style.width = m50.toFixed(2)  + '%';
+    barFine.style.width   = m200.toFixed(2) + '%';
+
+    const maxPct = Math.max(...pctData, 0);
+    lineChart.options.scales.y.max = maxPct === 0 ? 10 : Math.ceil((maxPct * 1.15) / 5) * 5;
+    lineChart.data.datasets[0].data = pctData;
+    lineChart.update();
+    chartAfsLbl.textContent = total > 0 ? `AFS = ${afsNum.toFixed(2)}` : '';
+  }
+
+  inputs.forEach(i => i.addEventListener('input', recalc));
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    inputs.forEach(i => { i.value = ''; });
+    recalc();
+    inputs[0].focus();
+  });
+
+  /* ── Save full report as PNG (manual Canvas draw) ── */
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    // Colours
+    const C = {
+      bg:      '#1c1c1e', surface: '#28282b', surface2: '#333337',
+      border:  '#48484e', accent:  '#C8102E', accent2: '#e8475f',
+      gold:    '#f4c94e', text:    '#f0f0f2', muted:   '#9a9aa8',
+      green:   '#34d399', primary: '#6D6E71',
+    };
+
+    // Collect current data
+    let total = 0;
+    inputs.forEach(inp => total += parseFloat(inp.value) || 0);
+    let afsNum = 0, m20 = 0, m50 = 0, m200 = 0;
+    const rows = [];
+    sieves.forEach((s, idx) => {
+      const w   = parseFloat(inputs[idx].value) || 0;
+      const pct = total > 0 ? (w / total) * 100 : 0;
+      afsNum += (pct * s.m) / 100;
+      if (['20','30','40'].includes(s.name))    m20  += pct;
+      if (['50','70','100'].includes(s.name))   m50  += pct;
+      if (['200','270','Pan'].includes(s.name)) m200 += pct;
+      rows.push({ name: s.name, w, pct });
+    });
+
+    // Canvas size
+    const S = 2; // scale for HiDPI
+    const W = 580, H = 920;
+    const ec = document.createElement('canvas');
+    ec.width  = W * S;
+    ec.height = H * S;
+    const cx  = ec.getContext('2d');
+    cx.scale(S, S);
+
+    // Helpers
+    const roundRect = (x, y, w, h, r, fill, stroke) => {
+      cx.beginPath();
+      cx.moveTo(x + r, y);
+      cx.lineTo(x + w - r, y);
+      cx.quadraticCurveTo(x + w, y, x + w, y + r);
+      cx.lineTo(x + w, y + h - r);
+      cx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      cx.lineTo(x + r, y + h);
+      cx.quadraticCurveTo(x, y + h, x, y + h - r);
+      cx.lineTo(x, y + r);
+      cx.quadraticCurveTo(x, y, x + r, y);
+      cx.closePath();
+      if (fill)   { cx.fillStyle   = fill;   cx.fill();   }
+      if (stroke) { cx.strokeStyle = stroke; cx.stroke(); }
+    };
+    const txt = (t, x, y, font, color, align = 'left', baseline = 'alphabetic') => {
+      cx.font = font; cx.fillStyle = color;
+      cx.textAlign = align; cx.textBaseline = baseline;
+      cx.fillText(t, x, y);
+    };
+    const line = (x1, y1, x2, y2, color, w = 1) => {
+      cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2);
+      cx.strokeStyle = color; cx.lineWidth = w; cx.stroke();
+    };
+
+    // ── Background ──
+    cx.fillStyle = C.bg;
+    cx.fillRect(0, 0, W, H);
+
+    // ── Card ──
+    roundRect(20, 20, W - 40, H - 40, 18, C.surface, C.border);
+
+    // ── Header ──
+    const hdr = { x: 20, y: 20, w: W - 40, h: 72 };
+    // gradient overlay
+    const hGrad = cx.createLinearGradient(hdr.x, hdr.y, hdr.x + hdr.w * 0.6, hdr.y);
+    hGrad.addColorStop(0, 'rgba(200,16,46,0.18)');
+    hGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    roundRect(hdr.x, hdr.y, hdr.w, hdr.h, 18, hGrad);
+    // bottom border of header
+    line(hdr.x, hdr.y + hdr.h, hdr.x + hdr.w, hdr.y + hdr.h, C.border);
+    // icon box
+    const iconGrad = cx.createLinearGradient(44, 34, 74, 64);
+    iconGrad.addColorStop(0, C.accent); iconGrad.addColorStop(1, C.accent2);
+    roundRect(44, 34, 40, 40, 10, iconGrad);
+    txt('⚗️', 64, 54, '20px sans-serif', '#fff', 'center', 'middle');
+    // titles
+    txt('AFS Calculator', 100, 56, '700 18px Sora, sans-serif', C.text, 'left', 'middle');
+    txt('American Foundry Society · Sand Fineness', 100, 74, '12px DM Mono, monospace', C.muted, 'left', 'alphabetic');
+
+    // ── Table ──
+    let ty = hdr.y + hdr.h + 20;
+    const tx = 40, tw = W - 80;
+    const colW = [80, (tw - 80) * 0.5, (tw - 80) * 0.5];
+    const rowH = 30;
+
+    // Header row
+    roundRect(tx, ty, tw, rowH, 8, C.surface2);
+    cx.font = '600 10px Sora, sans-serif';
+    cx.fillStyle = C.muted; cx.textBaseline = 'middle';
+    cx.textAlign = 'left';  cx.fillText('SIEVE',      tx + 14,              ty + rowH / 2);
+    cx.textAlign = 'right'; cx.fillText('WEIGHT (g)', tx + colW[0] + colW[1], ty + rowH / 2);
+    cx.textAlign = 'right'; cx.fillText('% RETAINED', tx + tw - 14,          ty + rowH / 2);
+    ty += rowH;
+
+    // Data rows
+    rows.forEach((r, i) => {
+      const bg = i % 2 === 0 ? C.surface : C.surface2;
+      cx.fillStyle = bg;
+      cx.fillRect(tx, ty, tw, rowH);
+      line(tx, ty, tx + tw, ty, C.border, 0.5);
+
+      txt(r.name,              tx + 14,              ty + rowH / 2, '500 13px DM Mono, monospace', C.primary,  'left',  'middle');
+      txt(r.w > 0 ? r.w.toFixed(2) : '—', tx + colW[0] + colW[1], ty + rowH / 2, '13px DM Mono, monospace', C.text,    'right', 'middle');
+      const pctColor = r.pct > 0 ? C.green : C.muted;
+      txt(r.pct > 0 ? r.pct.toFixed(2) + '%' : '—', tx + tw - 14, ty + rowH / 2, '13px DM Mono, monospace', pctColor, 'right', 'middle');
+      ty += rowH;
+    });
+
+    // Bottom border of table
+    line(tx, ty, tx + tw, ty, C.border, 0.5);
+
+    // Sand weight badge
+    ty += 12;
+    txt(`Sand Weight: ${total.toFixed(2)} g`, tx + tw, ty + 10, '11px DM Mono, monospace', C.muted, 'right', 'middle');
+    ty += 22;
+
+    // ── AFS Card ──
+    const afsH = 60;
+    const afsGrad = cx.createLinearGradient(tx, ty, tx + tw, ty);
+    afsGrad.addColorStop(0, 'rgba(200,16,46,0.22)');
+    afsGrad.addColorStop(1, 'rgba(200,16,46,0.06)');
+    roundRect(tx, ty, tw, afsH, 12, afsGrad, 'rgba(200,16,46,0.4)');
+    txt('AFS FINENESS NUMBER', tx + 16, ty + 18, '600 10px Sora, sans-serif', C.muted);
+    txt(total > 0 ? afsNum.toFixed(2) : '—', tx + 16, ty + 48, '700 28px DM Mono, monospace', C.gold);
+    // badge
+    const badgeTxt = 'AFS GFN';
+    cx.font = '600 11px Sora, sans-serif';
+    const bw = cx.measureText(badgeTxt).width + 20;
+    roundRect(tx + tw - bw - 14, ty + afsH / 2 - 13, bw, 26, 13, 'rgba(200,16,46,0.15)', 'rgba(200,16,46,0.35)');
+    txt(badgeTxt, tx + tw - 14 - bw / 2, ty + afsH / 2, '600 11px Sora, sans-serif', C.accent2, 'center', 'middle');
+    ty += afsH + 10;
+
+    // ── 3 fraction cards ──
+    const cw2 = (tw - 10) / 2;
+    const fh  = 56;
+    const fracs = [
+      { label: 'COARSE · M20+30+40',  val: total > 0 ? m20.toFixed(2)  + '%' : '—', sub: 'Coarse fraction', x: tx,          w: cw2 },
+      { label: 'MEDIUM · M50+70+100', val: total > 0 ? m50.toFixed(2)  + '%' : '—', sub: 'Medium fraction', x: tx + cw2 + 10, w: cw2 },
+    ];
+    fracs.forEach(f => {
+      roundRect(f.x, ty, f.w, fh, 12, C.surface2, C.border);
+      txt(f.label, f.x + 14, ty + 16, '600 9px Sora, sans-serif',    C.muted);
+      txt(f.val,   f.x + 14, ty + 36, '500 16px DM Mono, monospace', C.text);
+      txt(f.sub,   f.x + 14, ty + 50, '10px Sora, sans-serif',       C.muted);
+    });
+    ty += fh + 10;
+    roundRect(tx, ty, tw, fh, 12, C.surface2, C.border);
+    txt('FINE · M200+270+PAN', tx + 14, ty + 16, '600 9px Sora, sans-serif',    C.muted);
+    txt(total > 0 ? m200.toFixed(2) + '%' : '—', tx + 14, ty + 36, '500 16px DM Mono, monospace', C.text);
+    txt('Fine fraction', tx + 14, ty + 50, '10px Sora, sans-serif', C.muted);
+    ty += fh + 10;
+
+    // ── Distribution bar ──
+    const barBoxH = 70;
+    roundRect(tx, ty, tw, barBoxH, 12, C.surface2, C.border);
+    txt('DISTRIBUTION', tx + 14, ty + 18, '600 10px Sora, sans-serif', C.muted);
+    txt('100%',         tx + tw - 14, ty + 18, '600 10px Sora, sans-serif', C.muted, 'right');
+
+    const barY = ty + 28, barH2 = 10, barW = tw - 28;
+    cx.fillStyle = C.border;
+    roundRect(tx + 14, barY, barW, barH2, 5, C.border);
+
+    let bx = tx + 14;
+    const segs = [
+      { pct: m20,  c1: '#C8102E', c2: '#e8475f' },
+      { pct: m50,  c1: '#6D6E71', c2: '#9a9aaa' },
+      { pct: m200, c1: '#34d399', c2: '#6ee7b7' },
+    ];
+    segs.forEach(seg => {
+      const sw = (seg.pct / 100) * barW;
+      if (sw < 1) return;
+      const g = cx.createLinearGradient(bx, 0, bx + sw, 0);
+      g.addColorStop(0, seg.c1); g.addColorStop(1, seg.c2);
+      cx.beginPath();
+      cx.roundRect(bx, barY, sw, barH2, 5);
+      cx.fillStyle = g; cx.fill();
+      bx += sw + 2;
+    });
+
+    // Legend
+    const legends = [
+      { dot: '#C8102E', label: 'Coarse (20–40)' },
+      { dot: '#6D6E71', label: 'Medium (50–100)' },
+      { dot: '#34d399', label: 'Fine (200–Pan)' },
+    ];
+    let lx = tx + 14;
+    const lY = ty + barH2 + 38;
+    legends.forEach(l => {
+      cx.beginPath(); cx.arc(lx + 5, lY - 3, 5, 0, Math.PI * 2);
+      cx.fillStyle = l.dot; cx.fill();
+      txt(l.label, lx + 14, lY, '11px Sora, sans-serif', C.muted);
+      lx += cx.measureText(l.label).width + 30;
+    });
+    ty += barBoxH + 10;
+
+    // ── Chart ──
+    const chartBoxH = 220;
+    roundRect(tx, ty, tw, chartBoxH, 12, C.surface2, C.border);
+    txt('% RETAINED PER SIEVE', tx + 14, ty + 18, '600 10px Sora, sans-serif', C.muted);
+    if (total > 0) txt(`AFS = ${afsNum.toFixed(2)}`, tx + tw - 14, ty + 18, '11px DM Mono, monospace', C.gold, 'right');
+
+    const cxOff = tx + 48, cyOff = ty + 32, cxW = tw - 62, cxH = chartBoxH - 48;
+    const pctData = rows.map(r => r.pct);
+    const maxPct  = Math.max(...pctData, 0);
+    const yMax    = maxPct === 0 ? 10 : Math.ceil((maxPct * 1.15) / 5) * 5;
+    const n = sieves.length;
+
+    // Grid lines & Y labels
+    const yTicks = 5;
+    for (let i = 0; i <= yTicks; i++) {
+      const val = (yMax / yTicks) * i;
+      const yPos = cyOff + cxH - (val / yMax) * cxH;
+      line(cxOff, yPos, cxOff + cxW, yPos, 'rgba(72,72,78,0.6)', 0.5);
+      txt(val.toFixed(0) + '%', cxOff - 6, yPos, '10px DM Mono, monospace', C.muted, 'right', 'middle');
+    }
+
+    // X labels
+    sieves.forEach((s, i) => {
+      const xPos = cxOff + (i / (n - 1)) * cxW;
+      txt(s.name, xPos, cyOff + cxH + 14, '10px DM Mono, monospace', C.muted, 'center');
+    });
+
+    // Axes
+    line(cxOff, cyOff, cxOff, cyOff + cxH, C.border, 1);
+    line(cxOff, cyOff + cxH, cxOff + cxW, cyOff + cxH, C.border, 1);
+
+    // Fill gradient under line
+    const pts = pctData.map((p, i) => ({
+      x: cxOff + (i / (n - 1)) * cxW,
+      y: cyOff + cxH - (p / yMax) * cxH,
+    }));
+    if (total > 0 && maxPct > 0) {
+      cx.beginPath();
+      cx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        const mx = (pts[i - 1].x + pts[i].x) / 2;
+        cx.bezierCurveTo(mx, pts[i - 1].y, mx, pts[i].y, pts[i].x, pts[i].y);
+      }
+      cx.lineTo(pts[pts.length - 1].x, cyOff + cxH);
+      cx.lineTo(pts[0].x, cyOff + cxH);
+      cx.closePath();
+      const fillG = cx.createLinearGradient(0, cyOff, 0, cyOff + cxH);
+      fillG.addColorStop(0, 'rgba(200,16,46,0.30)');
+      fillG.addColorStop(1, 'rgba(200,16,46,0)');
+      cx.fillStyle = fillG; cx.fill();
+
+      // Line
+      cx.beginPath();
+      cx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        const mx = (pts[i - 1].x + pts[i].x) / 2;
+        cx.bezierCurveTo(mx, pts[i - 1].y, mx, pts[i].y, pts[i].x, pts[i].y);
+      }
+      cx.strokeStyle = C.accent; cx.lineWidth = 2.5;
+      cx.lineJoin = 'round'; cx.stroke();
+
+      // Dots
+      pts.forEach(p => {
+        cx.beginPath(); cx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        cx.fillStyle = C.accent2; cx.fill();
+        cx.strokeStyle = C.surface2; cx.lineWidth = 2; cx.stroke();
+      });
+    }
+
+    // ── Download ──
+    const link = document.createElement('a');
+    link.download = 'afs-calculator.png';
+    link.href = ec.toDataURL('image/png');
+    link.click();
+  });
+})();
+</script>
+</body>
+</html>
