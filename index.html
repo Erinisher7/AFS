@@ -459,23 +459,22 @@
     inputs[0].focus();
   });
 
-  /* ── Save full report as PNG (manual Canvas draw) ── */
+  /* ── Save full report as PNG (manual Canvas draw, auto-height) ── */
   document.getElementById('saveBtn').addEventListener('click', () => {
-    // Colours
     const C = {
-      bg:      '#1c1c1e', surface: '#28282b', surface2: '#333337',
-      border:  '#48484e', accent:  '#C8102E', accent2: '#e8475f',
-      gold:    '#f4c94e', text:    '#f0f0f2', muted:   '#9a9aa8',
-      green:   '#34d399', primary: '#6D6E71',
+      bg: '#1c1c1e', surface: '#28282b', surface2: '#333337',
+      border: '#48484e', accent: '#C8102E', accent2: '#e8475f',
+      gold: '#f4c94e', text: '#f0f0f2', muted: '#9a9aa8',
+      green: '#34d399', primary: '#6D6E71',
     };
 
-    // Collect current data
+    // Collect data
     let total = 0;
     inputs.forEach(inp => total += parseFloat(inp.value) || 0);
     let afsNum = 0, m20 = 0, m50 = 0, m200 = 0;
     const rows = [];
     sieves.forEach((s, idx) => {
-      const w   = parseFloat(inputs[idx].value) || 0;
+      const w = parseFloat(inputs[idx].value) || 0;
       const pct = total > 0 ? (w / total) * 100 : 0;
       afsNum += (pct * s.m) / 100;
       if (['20','30','40'].includes(s.name))    m20  += pct;
@@ -483,21 +482,43 @@
       if (['200','270','Pan'].includes(s.name)) m200 += pct;
       rows.push({ name: s.name, w, pct });
     });
+    const pctData = rows.map(r => r.pct);
+    const maxPct  = Math.max(...pctData, 0);
+    const yMax    = maxPct === 0 ? 10 : Math.ceil((maxPct * 1.15) / 5) * 5;
 
-    // Canvas size
-    const S = 2; // scale for HiDPI
-    const W = 580, H = 920;
+    // Layout constants (all in logical px)
+    const W = 580, PAD = 20;
+    const tx = 40, tw = W - 80;
+    const rowH = 30, hdrH = 72;
+    const afsH = 60, fh = 56, barBoxH = 72, chartBoxH = 220;
+    const GAP = 10;
+
+    // Calculate exact total height
+    const H =
+      PAD +                              // top margin
+      hdrH +                             // header
+      PAD +                              // gap after header
+      rowH +                             // table header row
+      rows.length * rowH +               // table data rows
+      34 +                               // bottom border + sand weight badge
+      afsH + GAP +                       // AFS card
+      fh + GAP +                         // coarse+medium row
+      fh + GAP +                         // fine row
+      barBoxH + GAP +                    // distribution bar
+      chartBoxH +                        // chart
+      PAD * 2;                           // bottom padding
+
+    const S = 2;
     const ec = document.createElement('canvas');
     ec.width  = W * S;
     ec.height = H * S;
-    const cx  = ec.getContext('2d');
+    const cx = ec.getContext('2d');
     cx.scale(S, S);
 
-    // Helpers
-    const roundRect = (x, y, w, h, r, fill, stroke) => {
+    // ── Helpers ──
+    const rr = (x, y, w, h, r, fill, stroke) => {
       cx.beginPath();
-      cx.moveTo(x + r, y);
-      cx.lineTo(x + w - r, y);
+      cx.moveTo(x + r, y); cx.lineTo(x + w - r, y);
       cx.quadraticCurveTo(x + w, y, x + w, y + r);
       cx.lineTo(x + w, y + h - r);
       cx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
@@ -506,222 +527,165 @@
       cx.lineTo(x, y + r);
       cx.quadraticCurveTo(x, y, x + r, y);
       cx.closePath();
-      if (fill)   { cx.fillStyle   = fill;   cx.fill();   }
-      if (stroke) { cx.strokeStyle = stroke; cx.stroke(); }
+      if (fill)   { cx.fillStyle = fill;     cx.fill();   }
+      if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = 1; cx.stroke(); }
     };
-    const txt = (t, x, y, font, color, align = 'left', baseline = 'alphabetic') => {
+    const t = (str, x, y, font, color, align = 'left', base = 'alphabetic') => {
       cx.font = font; cx.fillStyle = color;
-      cx.textAlign = align; cx.textBaseline = baseline;
-      cx.fillText(t, x, y);
+      cx.textAlign = align; cx.textBaseline = base;
+      cx.fillText(str, x, y);
     };
-    const line = (x1, y1, x2, y2, color, w = 1) => {
+    const ln = (x1, y1, x2, y2, color, w = 1) => {
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2);
       cx.strokeStyle = color; cx.lineWidth = w; cx.stroke();
     };
 
-    // ── Background ──
+    // ── Background + card ──
     cx.fillStyle = C.bg;
     cx.fillRect(0, 0, W, H);
-
-    // ── Card ──
-    roundRect(20, 20, W - 40, H - 40, 18, C.surface, C.border);
+    rr(PAD, PAD, W - PAD * 2, H - PAD * 2, 18, C.surface, C.border);
 
     // ── Header ──
-    const hdr = { x: 20, y: 20, w: W - 40, h: 72 };
-    // gradient overlay
-    const hGrad = cx.createLinearGradient(hdr.x, hdr.y, hdr.x + hdr.w * 0.6, hdr.y);
-    hGrad.addColorStop(0, 'rgba(200,16,46,0.18)');
-    hGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    roundRect(hdr.x, hdr.y, hdr.w, hdr.h, 18, hGrad);
-    // bottom border of header
-    line(hdr.x, hdr.y + hdr.h, hdr.x + hdr.w, hdr.y + hdr.h, C.border);
-    // icon box
-    const iconGrad = cx.createLinearGradient(44, 34, 74, 64);
-    iconGrad.addColorStop(0, C.accent); iconGrad.addColorStop(1, C.accent2);
-    roundRect(44, 34, 40, 40, 10, iconGrad);
-    txt('⚗️', 64, 54, '20px sans-serif', '#fff', 'center', 'middle');
-    // titles
-    txt('AFS Calculator', 100, 56, '700 18px Sora, sans-serif', C.text, 'left', 'middle');
-    txt('American Foundry Society · Sand Fineness', 100, 74, '12px DM Mono, monospace', C.muted, 'left', 'alphabetic');
+    const hg = cx.createLinearGradient(PAD, PAD, PAD + (W - PAD * 2) * 0.6, PAD);
+    hg.addColorStop(0, 'rgba(200,16,46,0.18)'); hg.addColorStop(1, 'rgba(0,0,0,0)');
+    rr(PAD, PAD, W - PAD * 2, hdrH, 18, hg);
+    ln(PAD, PAD + hdrH, W - PAD, PAD + hdrH, C.border);
+    const ig = cx.createLinearGradient(44, 34, 74, 64);
+    ig.addColorStop(0, C.accent); ig.addColorStop(1, C.accent2);
+    rr(44, 34, 40, 40, 10, ig);
+    t('⚗️', 64, 54, '20px sans-serif', '#fff', 'center', 'middle');
+    t('AFS Calculator', 100, 56, '700 18px Sora, sans-serif', C.text, 'left', 'middle');
+    t('American Foundry Society · Sand Fineness', 100, 74, '12px DM Mono, monospace', C.muted);
 
     // ── Table ──
-    let ty = hdr.y + hdr.h + 20;
-    const tx = 40, tw = W - 80;
-    const colW = [80, (tw - 80) * 0.5, (tw - 80) * 0.5];
-    const rowH = 30;
-
-    // Header row
-    roundRect(tx, ty, tw, rowH, 8, C.surface2);
-    cx.font = '600 10px Sora, sans-serif';
-    cx.fillStyle = C.muted; cx.textBaseline = 'middle';
-    cx.textAlign = 'left';  cx.fillText('SIEVE',      tx + 14,              ty + rowH / 2);
-    cx.textAlign = 'right'; cx.fillText('WEIGHT (g)', tx + colW[0] + colW[1], ty + rowH / 2);
-    cx.textAlign = 'right'; cx.fillText('% RETAINED', tx + tw - 14,          ty + rowH / 2);
+    let ty = PAD + hdrH + PAD;
+    rr(tx, ty, tw, rowH, 6, C.surface2);
+    cx.font = '600 10px Sora, sans-serif'; cx.fillStyle = C.muted; cx.textBaseline = 'middle';
+    cx.textAlign = 'left';  cx.fillText('SIEVE',       tx + 14,       ty + rowH / 2);
+    cx.textAlign = 'right'; cx.fillText('WEIGHT (g)',  tx + tw - 120, ty + rowH / 2);
+    cx.textAlign = 'right'; cx.fillText('% RETAINED',  tx + tw - 14,  ty + rowH / 2);
     ty += rowH;
 
-    // Data rows
     rows.forEach((r, i) => {
-      const bg = i % 2 === 0 ? C.surface : C.surface2;
-      cx.fillStyle = bg;
+      cx.fillStyle = i % 2 === 0 ? C.surface : C.surface2;
       cx.fillRect(tx, ty, tw, rowH);
-      line(tx, ty, tx + tw, ty, C.border, 0.5);
-
-      txt(r.name,              tx + 14,              ty + rowH / 2, '500 13px DM Mono, monospace', C.primary,  'left',  'middle');
-      txt(r.w > 0 ? r.w.toFixed(2) : '—', tx + colW[0] + colW[1], ty + rowH / 2, '13px DM Mono, monospace', C.text,    'right', 'middle');
-      const pctColor = r.pct > 0 ? C.green : C.muted;
-      txt(r.pct > 0 ? r.pct.toFixed(2) + '%' : '—', tx + tw - 14, ty + rowH / 2, '13px DM Mono, monospace', pctColor, 'right', 'middle');
+      ln(tx, ty, tx + tw, ty, C.border, 0.5);
+      t(r.name, tx + 14, ty + rowH / 2, '500 13px DM Mono, monospace', C.primary, 'left', 'middle');
+      t(r.w > 0 ? r.w.toFixed(2) : '—', tx + tw - 120, ty + rowH / 2, '13px DM Mono, monospace', C.text, 'right', 'middle');
+      t(r.pct > 0 ? r.pct.toFixed(2) + '%' : '—', tx + tw - 14, ty + rowH / 2, '13px DM Mono, monospace', r.pct > 0 ? C.green : C.muted, 'right', 'middle');
       ty += rowH;
     });
+    ln(tx, ty, tx + tw, ty, C.border, 0.5);
 
-    // Bottom border of table
-    line(tx, ty, tx + tw, ty, C.border, 0.5);
-
-    // Sand weight badge
     ty += 12;
-    txt(`Sand Weight: ${total.toFixed(2)} g`, tx + tw, ty + 10, '11px DM Mono, monospace', C.muted, 'right', 'middle');
+    t(`Sand Weight: ${total.toFixed(2)} g`, tx + tw, ty + 10, '11px DM Mono, monospace', C.muted, 'right', 'middle');
     ty += 22;
 
-    // ── AFS Card ──
-    const afsH = 60;
-    const afsGrad = cx.createLinearGradient(tx, ty, tx + tw, ty);
-    afsGrad.addColorStop(0, 'rgba(200,16,46,0.22)');
-    afsGrad.addColorStop(1, 'rgba(200,16,46,0.06)');
-    roundRect(tx, ty, tw, afsH, 12, afsGrad, 'rgba(200,16,46,0.4)');
-    txt('AFS FINENESS NUMBER', tx + 16, ty + 18, '600 10px Sora, sans-serif', C.muted);
-    txt(total > 0 ? afsNum.toFixed(2) : '—', tx + 16, ty + 48, '700 28px DM Mono, monospace', C.gold);
-    // badge
-    const badgeTxt = 'AFS GFN';
+    // ── AFS card ──
+    const ag = cx.createLinearGradient(tx, ty, tx + tw, ty);
+    ag.addColorStop(0, 'rgba(200,16,46,0.22)'); ag.addColorStop(1, 'rgba(200,16,46,0.06)');
+    rr(tx, ty, tw, afsH, 12, ag, 'rgba(200,16,46,0.4)');
+    t('AFS FINENESS NUMBER', tx + 16, ty + 18, '600 10px Sora, sans-serif', C.muted);
+    t(total > 0 ? afsNum.toFixed(2) : '—', tx + 16, ty + 48, '700 28px DM Mono, monospace', C.gold);
+    const bTxt = 'AFS GFN';
     cx.font = '600 11px Sora, sans-serif';
-    const bw = cx.measureText(badgeTxt).width + 20;
-    roundRect(tx + tw - bw - 14, ty + afsH / 2 - 13, bw, 26, 13, 'rgba(200,16,46,0.15)', 'rgba(200,16,46,0.35)');
-    txt(badgeTxt, tx + tw - 14 - bw / 2, ty + afsH / 2, '600 11px Sora, sans-serif', C.accent2, 'center', 'middle');
-    ty += afsH + 10;
+    const bw = cx.measureText(bTxt).width + 20;
+    rr(tx + tw - bw - 14, ty + afsH / 2 - 13, bw, 26, 13, 'rgba(200,16,46,0.15)', 'rgba(200,16,46,0.35)');
+    t(bTxt, tx + tw - 14 - bw / 2, ty + afsH / 2, '600 11px Sora, sans-serif', C.accent2, 'center', 'middle');
+    ty += afsH + GAP;
 
-    // ── 3 fraction cards ──
-    const cw2 = (tw - 10) / 2;
-    const fh  = 56;
-    const fracs = [
-      { label: 'COARSE · M20+30+40',  val: total > 0 ? m20.toFixed(2)  + '%' : '—', sub: 'Coarse fraction', x: tx,          w: cw2 },
-      { label: 'MEDIUM · M50+70+100', val: total > 0 ? m50.toFixed(2)  + '%' : '—', sub: 'Medium fraction', x: tx + cw2 + 10, w: cw2 },
-    ];
-    fracs.forEach(f => {
-      roundRect(f.x, ty, f.w, fh, 12, C.surface2, C.border);
-      txt(f.label, f.x + 14, ty + 16, '600 9px Sora, sans-serif',    C.muted);
-      txt(f.val,   f.x + 14, ty + 36, '500 16px DM Mono, monospace', C.text);
-      txt(f.sub,   f.x + 14, ty + 50, '10px Sora, sans-serif',       C.muted);
+    // ── Fraction cards ──
+    const cw2 = (tw - GAP) / 2;
+    [
+      { label: 'COARSE · M20+30+40',  val: total > 0 ? m20.toFixed(2)  + '%' : '—', sub: 'Coarse fraction', x: tx },
+      { label: 'MEDIUM · M50+70+100', val: total > 0 ? m50.toFixed(2)  + '%' : '—', sub: 'Medium fraction', x: tx + cw2 + GAP },
+    ].forEach(f => {
+      rr(f.x, ty, cw2, fh, 12, C.surface2, C.border);
+      t(f.label, f.x + 14, ty + 16, '600 9px Sora, sans-serif', C.muted);
+      t(f.val,   f.x + 14, ty + 36, '500 16px DM Mono, monospace', C.text);
+      t(f.sub,   f.x + 14, ty + 50, '10px Sora, sans-serif', C.muted);
     });
-    ty += fh + 10;
-    roundRect(tx, ty, tw, fh, 12, C.surface2, C.border);
-    txt('FINE · M200+270+PAN', tx + 14, ty + 16, '600 9px Sora, sans-serif',    C.muted);
-    txt(total > 0 ? m200.toFixed(2) + '%' : '—', tx + 14, ty + 36, '500 16px DM Mono, monospace', C.text);
-    txt('Fine fraction', tx + 14, ty + 50, '10px Sora, sans-serif', C.muted);
-    ty += fh + 10;
+    ty += fh + GAP;
+    rr(tx, ty, tw, fh, 12, C.surface2, C.border);
+    t('FINE · M200+270+PAN', tx + 14, ty + 16, '600 9px Sora, sans-serif', C.muted);
+    t(total > 0 ? m200.toFixed(2) + '%' : '—', tx + 14, ty + 36, '500 16px DM Mono, monospace', C.text);
+    t('Fine fraction', tx + 14, ty + 50, '10px Sora, sans-serif', C.muted);
+    ty += fh + GAP;
 
     // ── Distribution bar ──
-    const barBoxH = 70;
-    roundRect(tx, ty, tw, barBoxH, 12, C.surface2, C.border);
-    txt('DISTRIBUTION', tx + 14, ty + 18, '600 10px Sora, sans-serif', C.muted);
-    txt('100%',         tx + tw - 14, ty + 18, '600 10px Sora, sans-serif', C.muted, 'right');
-
-    const barY = ty + 28, barH2 = 10, barW = tw - 28;
-    cx.fillStyle = C.border;
-    roundRect(tx + 14, barY, barW, barH2, 5, C.border);
-
+    rr(tx, ty, tw, barBoxH, 12, C.surface2, C.border);
+    t('DISTRIBUTION', tx + 14, ty + 18, '600 10px Sora, sans-serif', C.muted);
+    t('100%', tx + tw - 14, ty + 18, '600 10px Sora, sans-serif', C.muted, 'right');
+    const barY = ty + 30, barH2 = 10, barW = tw - 28;
+    rr(tx + 14, barY, barW, barH2, 5, C.border);
     let bx = tx + 14;
-    const segs = [
-      { pct: m20,  c1: '#C8102E', c2: '#e8475f' },
-      { pct: m50,  c1: '#6D6E71', c2: '#9a9aaa' },
-      { pct: m200, c1: '#34d399', c2: '#6ee7b7' },
-    ];
-    segs.forEach(seg => {
-      const sw = (seg.pct / 100) * barW;
+    [{ p: m20, c1: '#C8102E', c2: '#e8475f' }, { p: m50, c1: '#6D6E71', c2: '#9a9aaa' }, { p: m200, c1: '#34d399', c2: '#6ee7b7' }].forEach(seg => {
+      const sw = (seg.p / 100) * barW;
       if (sw < 1) return;
       const g = cx.createLinearGradient(bx, 0, bx + sw, 0);
       g.addColorStop(0, seg.c1); g.addColorStop(1, seg.c2);
-      cx.beginPath();
-      cx.roundRect(bx, barY, sw, barH2, 5);
+      cx.beginPath(); cx.roundRect(bx, barY, sw, barH2, 5);
       cx.fillStyle = g; cx.fill();
       bx += sw + 2;
     });
-
-    // Legend
-    const legends = [
-      { dot: '#C8102E', label: 'Coarse (20–40)' },
-      { dot: '#6D6E71', label: 'Medium (50–100)' },
-      { dot: '#34d399', label: 'Fine (200–Pan)' },
-    ];
     let lx = tx + 14;
-    const lY = ty + barH2 + 38;
-    legends.forEach(l => {
-      cx.beginPath(); cx.arc(lx + 5, lY - 3, 5, 0, Math.PI * 2);
+    const lY = barY + barH2 + 18;
+    [{ dot: '#C8102E', label: 'Coarse (20–40)' }, { dot: '#6D6E71', label: 'Medium (50–100)' }, { dot: '#34d399', label: 'Fine (200–Pan)' }].forEach(l => {
+      cx.beginPath(); cx.arc(lx + 5, lY, 4, 0, Math.PI * 2);
       cx.fillStyle = l.dot; cx.fill();
-      txt(l.label, lx + 14, lY, '11px Sora, sans-serif', C.muted);
-      lx += cx.measureText(l.label).width + 30;
+      t(l.label, lx + 14, lY, '11px Sora, sans-serif', C.muted, 'left', 'middle');
+      cx.font = '11px Sora, sans-serif';
+      lx += cx.measureText(l.label).width + 28;
     });
-    ty += barBoxH + 10;
+    ty += barBoxH + GAP;
 
     // ── Chart ──
-    const chartBoxH = 220;
-    roundRect(tx, ty, tw, chartBoxH, 12, C.surface2, C.border);
-    txt('% RETAINED PER SIEVE', tx + 14, ty + 18, '600 10px Sora, sans-serif', C.muted);
-    if (total > 0) txt(`AFS = ${afsNum.toFixed(2)}`, tx + tw - 14, ty + 18, '11px DM Mono, monospace', C.gold, 'right');
+    rr(tx, ty, tw, chartBoxH, 12, C.surface2, C.border);
+    t('% RETAINED PER SIEVE', tx + 14, ty + 18, '600 10px Sora, sans-serif', C.muted);
+    if (total > 0) t(`AFS = ${afsNum.toFixed(2)}`, tx + tw - 14, ty + 18, '11px DM Mono, monospace', C.gold, 'right');
 
-    const cxOff = tx + 48, cyOff = ty + 32, cxW = tw - 62, cxH = chartBoxH - 48;
-    const pctData = rows.map(r => r.pct);
-    const maxPct  = Math.max(...pctData, 0);
-    const yMax    = maxPct === 0 ? 10 : Math.ceil((maxPct * 1.15) / 5) * 5;
+    const cxOff = tx + 46, cyOff = ty + 32, cxW = tw - 60, cxH = chartBoxH - 50;
     const n = sieves.length;
-
-    // Grid lines & Y labels
     const yTicks = 5;
     for (let i = 0; i <= yTicks; i++) {
       const val = (yMax / yTicks) * i;
-      const yPos = cyOff + cxH - (val / yMax) * cxH;
-      line(cxOff, yPos, cxOff + cxW, yPos, 'rgba(72,72,78,0.6)', 0.5);
-      txt(val.toFixed(0) + '%', cxOff - 6, yPos, '10px DM Mono, monospace', C.muted, 'right', 'middle');
+      const yp = cyOff + cxH - (val / yMax) * cxH;
+      ln(cxOff, yp, cxOff + cxW, yp, 'rgba(72,72,78,0.5)', 0.5);
+      t(val.toFixed(0) + '%', cxOff - 6, yp, '10px DM Mono, monospace', C.muted, 'right', 'middle');
     }
-
-    // X labels
     sieves.forEach((s, i) => {
-      const xPos = cxOff + (i / (n - 1)) * cxW;
-      txt(s.name, xPos, cyOff + cxH + 14, '10px DM Mono, monospace', C.muted, 'center');
+      t(s.name, cxOff + (i / (n - 1)) * cxW, cyOff + cxH + 14, '10px DM Mono, monospace', C.muted, 'center');
     });
+    ln(cxOff, cyOff, cxOff, cyOff + cxH, C.border, 1);
+    ln(cxOff, cyOff + cxH, cxOff + cxW, cyOff + cxH, C.border, 1);
 
-    // Axes
-    line(cxOff, cyOff, cxOff, cyOff + cxH, C.border, 1);
-    line(cxOff, cyOff + cxH, cxOff + cxW, cyOff + cxH, C.border, 1);
-
-    // Fill gradient under line
     const pts = pctData.map((p, i) => ({
       x: cxOff + (i / (n - 1)) * cxW,
       y: cyOff + cxH - (p / yMax) * cxH,
     }));
-    if (total > 0 && maxPct > 0) {
+    if (maxPct > 0) {
+      // gradient fill
       cx.beginPath();
       cx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) {
-        const mx = (pts[i - 1].x + pts[i].x) / 2;
-        cx.bezierCurveTo(mx, pts[i - 1].y, mx, pts[i].y, pts[i].x, pts[i].y);
+        const mx = (pts[i-1].x + pts[i].x) / 2;
+        cx.bezierCurveTo(mx, pts[i-1].y, mx, pts[i].y, pts[i].x, pts[i].y);
       }
-      cx.lineTo(pts[pts.length - 1].x, cyOff + cxH);
+      cx.lineTo(pts[pts.length-1].x, cyOff + cxH);
       cx.lineTo(pts[0].x, cyOff + cxH);
       cx.closePath();
-      const fillG = cx.createLinearGradient(0, cyOff, 0, cyOff + cxH);
-      fillG.addColorStop(0, 'rgba(200,16,46,0.30)');
-      fillG.addColorStop(1, 'rgba(200,16,46,0)');
-      cx.fillStyle = fillG; cx.fill();
-
-      // Line
+      const fg = cx.createLinearGradient(0, cyOff, 0, cyOff + cxH);
+      fg.addColorStop(0, 'rgba(200,16,46,0.32)'); fg.addColorStop(1, 'rgba(200,16,46,0)');
+      cx.fillStyle = fg; cx.fill();
+      // line
       cx.beginPath();
       cx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) {
-        const mx = (pts[i - 1].x + pts[i].x) / 2;
-        cx.bezierCurveTo(mx, pts[i - 1].y, mx, pts[i].y, pts[i].x, pts[i].y);
+        const mx = (pts[i-1].x + pts[i].x) / 2;
+        cx.bezierCurveTo(mx, pts[i-1].y, mx, pts[i].y, pts[i].x, pts[i].y);
       }
-      cx.strokeStyle = C.accent; cx.lineWidth = 2.5;
-      cx.lineJoin = 'round'; cx.stroke();
-
-      // Dots
+      cx.strokeStyle = C.accent; cx.lineWidth = 2.5; cx.lineJoin = 'round'; cx.stroke();
+      // dots
       pts.forEach(p => {
         cx.beginPath(); cx.arc(p.x, p.y, 4, 0, Math.PI * 2);
         cx.fillStyle = C.accent2; cx.fill();
